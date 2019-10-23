@@ -37,6 +37,8 @@ import (
 
 	_ "github.com/gardener/external-dns-management/pkg/controller/source/ingress"
 	_ "github.com/gardener/external-dns-management/pkg/controller/source/service"
+
+	_ "github.com/gardener/external-dns-management/pkg/controller/owners"
 )
 
 var Version string

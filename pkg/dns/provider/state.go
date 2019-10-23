@@ -107,7 +107,7 @@ func NewDNSState(ctx Context, classes *controller.Classes, config Config) *state
 		config:          config,
 		realms:          realms,
 		accountCache:    NewAccountCache(config.CacheTTL, config.CacheDir),
-		ownerCache:      NewOwnerCache(&config),
+		ownerCache:      NewOwnerCache(config.Ident),
 		pending:         utils.StringSet{},
 		pendingKeys:     resources.ClusterObjectKeySet{},
 		foreign:         map[resources.ObjectName]*foreignProvider{},

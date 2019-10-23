@@ -17,11 +17,10 @@
 package provider
 
 import (
-	"time"
-
 	"github.com/gardener/external-dns-management/pkg/crds"
 	"github.com/gardener/external-dns-management/pkg/dns"
 	"github.com/gardener/external-dns-management/pkg/dns/source"
+	"time"
 
 	"github.com/gardener/controller-manager-library/pkg/controllermanager/controller"
 	"github.com/gardener/controller-manager-library/pkg/controllermanager/controller/reconcile"
@@ -39,10 +38,14 @@ const CONTROLLER_GROUP_DNS_CONTROLLERS = "dnscontrollers"
 
 const TARGET_CLUSTER = source.TARGET_CLUSTER
 const PROVIDER_CLUSTER = "provider"
+const CONTROLLER_OWNER= "dns-owners"
 
 var ownerGroupKind = resources.NewGroupKind(api.GroupName, api.DNSOwnerKind)
 var providerGroupKind = resources.NewGroupKind(api.GroupName, api.DNSProviderKind)
 var entryGroupKind = resources.NewGroupKind(api.GroupName, api.DNSEntryKind)
+
+
+const KEY_OWNERS = "global-dns-owners"
 
 func DNSController(name string, factory DNSHandlerFactory) controller.Configuration {
 	if name == "" {
@@ -50,6 +53,7 @@ func DNSController(name string, factory DNSHandlerFactory) controller.Configurat
 	}
 	return controller.Configure(name).
 		RequireLease().
+		Require(CONTROLLER_OWNER).
 		DefaultedStringOption(OPT_CLASS, dns.DEFAULT_CLASS, "Identifier used to differentiate responsible controllers for entries").
 		DefaultedStringOption(OPT_IDENTIFIER, "dnscontroller", "Identifier used to mark DNS entries").
 		DefaultedStringOption(OPT_CACHE_DIR, "", "Directory to store zone caches (for reload after restart)").

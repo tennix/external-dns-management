@@ -47,7 +47,7 @@ type Config struct {
 func NewConfigForController(c controller.Interface, factory DNSHandlerFactory) (*Config, error) {
 	ident, err := c.GetStringOption(OPT_IDENTIFIER)
 	if err != nil {
-		ident = "identifier-not-configured"
+		return nil, fmt.Errorf("identifier not configured")
 	}
 	ttl, err := c.GetIntOption(OPT_TTL)
 	if err != nil {

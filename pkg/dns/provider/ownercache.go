@@ -38,11 +38,11 @@ type OwnerCache struct {
 	ownercnt map[string]int
 }
 
-func NewOwnerCache(config *Config) *OwnerCache {
+func NewOwnerCache(ident string) *OwnerCache {
 	return &OwnerCache{
-		ownerids: utils.NewStringSet(config.Ident),
+		ownerids: utils.NewStringSet(ident),
 		owners:   map[string]OwnerInfo{},
-		ownercnt: map[string]int{config.Ident: 1},
+		ownercnt: map[string]int{ident: 1},
 	}
 }
 
