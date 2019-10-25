@@ -14,7 +14,7 @@
  *
  */
 
-package provider
+package defs
 
 import (
 	"github.com/gardener/external-dns-management/pkg/dns/source"
@@ -25,6 +25,13 @@ import (
 */
 
 const (
+	CONTROLLER_GROUP_DNS_CONTROLLERS = "dnscontrollers"
+
+	PROVIDER_CLUSTER = "provider"
+	TARGET_CLUSTER   = source.TARGET_CLUSTER
+
+	KEY_OWNERS = "global-dns-owners"
+
 	OPT_IDENTIFIER                 = "identifier"
 	OPT_CLASS                      = source.OPT_CLASS
 	OPT_DRYRUN                     = "dry-run"

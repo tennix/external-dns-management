@@ -17,8 +17,11 @@
 package provider
 
 import (
+	ownerctrl "github.com/gardener/external-dns-management/pkg/controller/owners"
 	"github.com/gardener/external-dns-management/pkg/crds"
 	"github.com/gardener/external-dns-management/pkg/dns"
+	"github.com/gardener/external-dns-management/pkg/dns/owners"
+	"github.com/gardener/external-dns-management/pkg/dns/provider/defs"
 	"github.com/gardener/external-dns-management/pkg/dns/source"
 	"time"
 
@@ -34,18 +37,32 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const CONTROLLER_GROUP_DNS_CONTROLLERS = "dnscontrollers"
-
-const TARGET_CLUSTER = source.TARGET_CLUSTER
-const PROVIDER_CLUSTER = "provider"
-const CONTROLLER_OWNER= "dns-owners"
-
 var ownerGroupKind = resources.NewGroupKind(api.GroupName, api.DNSOwnerKind)
 var providerGroupKind = resources.NewGroupKind(api.GroupName, api.DNSProviderKind)
 var entryGroupKind = resources.NewGroupKind(api.GroupName, api.DNSEntryKind)
 
+const (
+	CONTROLLER_GROUP_DNS_CONTROLLERS = defs.CONTROLLER_GROUP_DNS_CONTROLLERS
+	CONTROLLER_OWNER                 = ownerctrl.CONTROLLER_OWNER
 
-const KEY_OWNERS = "global-dns-owners"
+	TARGET_CLUSTER   = defs.TARGET_CLUSTER
+	PROVIDER_CLUSTER = defs.PROVIDER_CLUSTER
+
+	OPT_CLASS                      = defs.OPT_CLASS
+	OPT_IDENTIFIER                 = defs.OPT_IDENTIFIER
+	OPT_DRYRUN                     = defs.OPT_DRYRUN
+	OPT_DISABLE_ZONE_STATE_CACHING = defs.OPT_DISABLE_ZONE_STATE_CACHING
+	OPT_TTL                        = defs.OPT_TTL
+	OPT_CACHE_TTL                  = defs.OPT_CACHE_TTL
+	OPT_CACHE_DIR                  = defs.OPT_CACHE_DIR
+	OPT_SETUP                      = defs.OPT_SETUP
+	OPT_DNSDELAY                   = defs.OPT_DNSDELAY
+	OPT_RESCHEDULEDELAY            = defs.OPT_RESCHEDULEDELAY
+	OPT_PROVIDERTYPES              = defs.OPT_PROVIDERTYPES
+
+	HOSTEDZONE_PREFIX = defs.HOSTEDZONE_PREFIX
+	KEY_OWNERS        = defs.KEY_OWNERS
+)
 
 func DNSController(name string, factory DNSHandlerFactory) controller.Configuration {
 	if name == "" {
@@ -69,10 +86,6 @@ func DNSController(name string, factory DNSHandlerFactory) controller.Configurat
 		CustomResourceDefinitions(crds.DNSEntryCRD, crds.DNSOwnerCRD).
 		MainResource(api.GroupName, api.DNSEntryKind).
 		DefaultWorkerPool(2, 0).
-		WorkerPool("ownerids", 1, 0).
-		Watches(
-			controller.NewResourceKey(api.GroupName, api.DNSOwnerKind),
-		).
 		Cluster(PROVIDER_CLUSTER).
 		CustomResourceDefinitions(crds.DNSProviderCRD).
 		WorkerPool("providers", 2, 10*time.Minute).
@@ -121,7 +134,11 @@ func Create(c controller.Interface, factory DNSHandlerFactory) (reconcile.Interf
 		controller: c,
 		state: c.GetOrCreateSharedValue(KEY_STATE,
 			func() interface{} {
-				return NewDNSState(NewDefaultContext(c), classes, *config)
+				owners := c.GetEnvironment().GetOrCreateSharedValue(KEY_OWNERS,
+					func() interface{} {
+						return owners.NewDefaultOwnerStack()
+					}).(*owners.OwnerStack)
+				return NewDNSState(NewDefaultContext(c), classes, owners, *config)
 			}).(*state),
 	}, nil
 }
@@ -148,12 +165,6 @@ func (this *reconciler) Command(logger logger.LogContext, cmd string) reconcile.
 
 func (this *reconciler) Reconcile(logger logger.LogContext, obj resources.Object) reconcile.Status {
 	switch {
-	case obj.IsA(&api.DNSOwner{}):
-		if this.state.IsResponsibleFor(logger, obj) {
-			return this.state.UpdateOwner(logger, dnsutils.DNSOwner(obj))
-		} else {
-			return this.state.OwnerDeleted(logger, obj.Key())
-		}
 	case obj.IsA(&api.DNSProvider{}):
 		if this.state.IsResponsibleFor(logger, obj) {
 			return this.state.UpdateProvider(logger, dnsutils.DNSProvider(obj))
@@ -191,8 +202,6 @@ func (this *reconciler) Delete(logger logger.LogContext, obj resources.Object) r
 func (this *reconciler) Deleted(logger logger.LogContext, key resources.ClusterObjectKey) reconcile.Status {
 	logger.Debugf("deleted %s", key)
 	switch key.GroupKind() {
-	case ownerGroupKind:
-		return this.state.OwnerDeleted(logger, key.ObjectKey())
 	case providerGroupKind:
 		return this.state.ProviderDeleted(logger, key.ObjectKey())
 	case entryGroupKind:

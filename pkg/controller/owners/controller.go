@@ -14,16 +14,14 @@
  * limitations under the License.
  *
  */
-
-
 package owners
 
 import (
 	"fmt"
 	"github.com/gardener/external-dns-management/pkg/crds"
 	"github.com/gardener/external-dns-management/pkg/dns"
-	"github.com/gardener/external-dns-management/pkg/dns/extension"
-	. "github.com/gardener/external-dns-management/pkg/dns/provider"
+	"github.com/gardener/external-dns-management/pkg/dns/owners"
+	. "github.com/gardener/external-dns-management/pkg/dns/provider/defs"
 	"github.com/gardener/external-dns-management/pkg/dns/source"
 
 	"github.com/gardener/controller-manager-library/pkg/controllermanager/controller"
@@ -32,15 +30,14 @@ import (
 	api "github.com/gardener/external-dns-management/pkg/apis/dns/v1alpha1"
 )
 
-
 var ownerGroupKind = resources.NewGroupKind(api.GroupName, api.DNSOwnerKind)
 
+const CONTROLLER_OWNER = "dns-owners"
 
 func init() {
 	controller.Configure(CONTROLLER_OWNER).
 		DefaultedStringOption(OPT_CLASS, dns.DEFAULT_CLASS, "Identifier used to differentiate responsible controllers for entries").
 		DefaultedStringOption(OPT_IDENTIFIER, "dnscontroller", "Identifier used to mark DNS entries").
-		DefaultedBoolOption(OPT_DRYRUN, false, "just check, don't modify").
 		DefaultedIntOption(OPT_SETUP, 1, "number of processors for controller setup").
 		Reconciler(create).
 		Cluster(PROVIDER_CLUSTER).
@@ -62,12 +59,11 @@ func create(c controller.Interface) (reconcile.Interface, error) {
 	}
 	return &reconciler{
 		controller: c,
-		classes: classes,
-		cache: NewOwnerCache(ident),
+		classes:    classes,
+		cache:      owners.NewOwnerCache(ident),
 		owners: c.GetEnvironment().GetOrCreateSharedValue(KEY_OWNERS,
 			func() interface{} {
-				return extension.NewOwners()
-			}).(*extension.Owners),
+				return owners.NewDefaultOwnerStack()
+			}).(*owners.OwnerStack).BaseLayer().(*owners.Owners),
 	}, nil
 }
-

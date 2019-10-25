@@ -22,6 +22,7 @@ import (
 	"github.com/gardener/controller-manager-library/pkg/ctxutil"
 	"github.com/gardener/controller-manager-library/pkg/resources/access"
 	"github.com/gardener/external-dns-management/pkg/dns"
+	"github.com/gardener/external-dns-management/pkg/dns/owners"
 	"strings"
 	"sync"
 	"time"
@@ -68,7 +69,7 @@ type state struct {
 	realms access.RealmTypes
 
 	accountCache *AccountCache
-	ownerCache   *OwnerCache
+	ownerStack   *owners.OwnerStack
 
 	foreign         map[resources.ObjectName]*foreignProvider
 	providers       map[resources.ObjectName]*dnsProviderVersion
@@ -87,7 +88,7 @@ type state struct {
 	initialized bool
 }
 
-func NewDNSState(ctx Context, classes *controller.Classes, config Config) *state {
+func NewDNSState(ctx Context, classes *controller.Classes, owners *owners.OwnerStack, config Config) *state {
 	ctx.Infof("responsible for classes:     %s (%s)", classes, classes.Main())
 	ctx.Infof("availabled providers types   %s", config.Factory.TypeCodes())
 	ctx.Infof("enabled providers types:     %s", config.Enabled)
@@ -107,7 +108,7 @@ func NewDNSState(ctx Context, classes *controller.Classes, config Config) *state
 		config:          config,
 		realms:          realms,
 		accountCache:    NewAccountCache(config.CacheTTL, config.CacheDir),
-		ownerCache:      NewOwnerCache(config.Ident),
+		ownerStack:      owners,
 		pending:         utils.StringSet{},
 		pendingKeys:     resources.ClusterObjectKeySet{},
 		foreign:         map[resources.ObjectName]*foreignProvider{},
@@ -140,15 +141,12 @@ func (this *state) Setup() {
 			this.UpdateProvider(this.context.NewContext("provider", p.ObjectName().String()), p)
 		}
 	}, processors)
-	this.setupFor(&api.DNSOwner{}, "owners", func(e resources.Object) {
-		p := dnsutils.DNSOwner(e)
-		this.UpdateOwner(this.context.NewContext("owner", p.ObjectName().String()), p)
-	}, processors)
 	this.setupFor(&api.DNSEntry{}, "entries", func(e resources.Object) {
 		p := dnsutils.DNSEntry(e)
 		this.UpdateEntry(this.context.NewContext("entry", p.ObjectName().String()), p)
 	}, processors)
 
+	this.ownerStack.RegisterHandler(this)
 	this.initialized = true
 	this.context.Infof("setup done - starting reconcilation")
 }
@@ -1190,7 +1188,7 @@ func (this *state) reconcileZone(logger logger.LogContext, req *zoneReconcilatio
 		return nil
 	}
 	req.zone.next = time.Now().Add(this.config.Delay)
-	ownerids := this.ownerCache.GetIds()
+	ownerids := this.ownerStack.GetIds()
 	metrics.ReportZoneEntries(req.zone.ProviderType(), zoneid, len(req.entries))
 	logger.Infof("reconcile ZONE %s (%s) for %d dns entries (%d stale) (ownerids: %s)", req.zone.Id(), req.zone.Domain(), len(req.entries), len(req.stale), ownerids)
 	changes := NewChangeModel(logger, ownerids, req, this.config)
@@ -1233,26 +1231,13 @@ func (this *state) reconcileZone(logger logger.LogContext, req *zoneReconcilatio
 	return err
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// OwnerIds
-////////////////////////////////////////////////////////////////////////////////
+func (this *state) OwnerSetChanged(added, deleted utils.StringSet) {
+	if len(deleted) > 0 {
+		this.TriggerEntriesByOwner(this.context, deleted)
 
-func (this *state) UpdateOwner(logger logger.LogContext, owner *dnsutils.DNSOwnerObject) reconcile.Status {
-	changed, active := this.ownerCache.UpdateOwner(owner)
-	logger.Infof("update: changed owner ids %s, active owner ids %s", changed, active)
-	if len(changed) > 0 {
-		this.TriggerEntriesByOwner(logger, changed)
+	}
+	if len(added) > 0 {
+		this.TriggerEntriesByOwner(this.context, added)
 		this.TriggerHostedZones()
 	}
-	return reconcile.Succeeded(logger)
-}
-
-func (this *state) OwnerDeleted(logger logger.LogContext, key resources.ObjectKey) reconcile.Status {
-	changed, active := this.ownerCache.DeleteOwner(key)
-	logger.Infof("delete: changed owner ids %s, active owner ids %s", changed, active)
-	if len(changed) > 0 {
-		this.TriggerEntriesByOwner(logger, changed)
-		this.TriggerHostedZones()
-	}
-	return reconcile.Succeeded(logger)
 }

@@ -15,15 +15,15 @@
  *
  */
 
-package provider
+package owners
 
 import (
-	"github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"testing"
 )
 
 func Test(t *testing.T) {
-	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Provider")
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Extension")
 }

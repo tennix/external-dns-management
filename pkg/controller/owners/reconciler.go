@@ -22,24 +22,24 @@ import (
 	"github.com/gardener/controller-manager-library/pkg/controllermanager/controller/reconcile"
 	"github.com/gardener/controller-manager-library/pkg/logger"
 	"github.com/gardener/controller-manager-library/pkg/resources"
-	api "github.com/gardener/external-dns-management/pkg/apis/dns/v1alpha1"
-	"github.com/gardener/external-dns-management/pkg/dns/extension"
-	"github.com/gardener/external-dns-management/pkg/dns/provider"
-	dnsutils "github.com/gardener/external-dns-management/pkg/dns/utils"
 
+	api "github.com/gardener/external-dns-management/pkg/apis/dns/v1alpha1"
+	"github.com/gardener/external-dns-management/pkg/dns/owners"
+	. "github.com/gardener/external-dns-management/pkg/dns/provider/defs"
+	dnsutils "github.com/gardener/external-dns-management/pkg/dns/utils"
 
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const CLIENT_ID="dns-owner-resources"
+const CLIENT_ID = "dns-owner-resources"
 
 type reconciler struct {
 	reconcile.DefaultReconciler
 	controller controller.Interface
-	owners      *extension.Owners
-	classes     *controller.Classes
-	cache       *provider.OwnerCache
+	owners     *owners.Owners
+	classes    *controller.Classes
+	cache      *owners.OwnerCache
 }
 
 func (this *reconciler) setupFor(obj runtime.Object, msg string, exec func(resources.Object), processors int) {
@@ -53,7 +53,6 @@ func (this *reconciler) setupFor(obj runtime.Object, msg string, exec func(resou
 	}, processors)
 }
 
-
 func (this *reconciler) IsResponsibleFor(logger logger.LogContext, obj resources.Object) bool {
 	return this.classes.IsResponsibleFor(logger, obj)
 }
@@ -61,7 +60,7 @@ func (this *reconciler) IsResponsibleFor(logger logger.LogContext, obj resources
 func (this *reconciler) Setup() {
 	this.controller.Infof("*** state Setup ")
 
-	processors, err := this.controller.GetIntOption(provider.OPT_SETUP)
+	processors, err := this.controller.GetIntOption(OPT_SETUP)
 	if err != nil || processors <= 0 {
 		processors = 1
 	}
@@ -92,7 +91,6 @@ func (this *reconciler) Deleted(logger logger.LogContext, key resources.ClusterO
 	}
 	return reconcile.Succeeded(logger)
 }
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // OwnerIds

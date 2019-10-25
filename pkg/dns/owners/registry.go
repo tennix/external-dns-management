@@ -15,15 +15,27 @@
  *
  */
 
-package extension
+package owners
 
-import (
-	. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
-	"testing"
-)
+import "sync"
 
-func Test(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Extension")
+type AddLayer func(*OwnerStack)
+
+var lock sync.Mutex
+var layers []AddLayer
+
+func RegisterLayer(l AddLayer) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	layers = append(layers, l)
+}
+
+func ApplyLayers(stack *OwnerStack) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	for _, l := range layers {
+		l(stack)
+	}
 }

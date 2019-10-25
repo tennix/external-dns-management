@@ -231,7 +231,7 @@ func validate(state *state, entry *EntryVersion) (targets Targets, warnings []st
 	}
 
 	if utils.StringValue(spec.OwnerId) != "" {
-		if !state.ownerCache.IsResponsibleFor(*spec.OwnerId) {
+		if !state.ownerStack.IsResponsibleFor(*spec.OwnerId) {
 			err = fmt.Errorf("unknown owner id '%s'", *spec.OwnerId)
 		}
 	}
@@ -551,7 +551,7 @@ func (this *Entry) IsActive() bool {
 	if id == "" {
 		id = this.state.config.Ident
 	}
-	return this.state.ownerCache.IsResponsibleFor(id)
+	return this.state.ownerStack.IsResponsibleFor(id)
 }
 
 func (this *Entry) IsModified() bool {

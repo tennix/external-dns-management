@@ -15,7 +15,7 @@
  *
  */
 
-package provider
+package owners
 
 import (
 	"github.com/gardener/controller-manager-library/pkg/resources"
@@ -26,9 +26,7 @@ import (
 
 var _ = ginkgo.Describe("Owner cache", func() {
 
-	config := &Config{
-		Ident: "TEST",
-	}
+	config := "TEST"
 	key1 := resources.NewKey(resources.NewGroupKind("", "test"), "test", "o1")
 	name1 := key1.ObjectName().String()
 	key2 := resources.NewKey(resources.NewGroupKind("", "test"), "test", "o2")
