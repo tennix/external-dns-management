@@ -37,6 +37,7 @@ const CLIENT_ID = "dns-owner-resources"
 type reconciler struct {
 	reconcile.DefaultReconciler
 	controller controller.Interface
+	ident      string
 	owners     *owners.Owners
 	classes    *controller.Classes
 	cache      *owners.OwnerCache
@@ -51,6 +52,8 @@ func (this *reconciler) setupFor(obj runtime.Object, msg string, exec func(resou
 			exec(e)
 		}
 	}, processors)
+	this.controller.Infof("standard identifier: %s", this.ident)
+	this.controller.Infof("initial ownerset: %s", this.owners.GetIds())
 }
 
 func (this *reconciler) IsResponsibleFor(logger logger.LogContext, obj resources.Object) bool {

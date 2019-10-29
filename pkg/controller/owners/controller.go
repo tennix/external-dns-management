@@ -57,13 +57,17 @@ func create(c controller.Interface) (reconcile.Interface, error) {
 	if err != nil {
 		return nil, fmt.Errorf("identifier not configured")
 	}
+	stack := c.GetEnvironment().GetOrCreateSharedValue(KEY_OWNERS,
+		func() interface{} {
+			return owners.NewDefaultOwnerStack()
+		}).(*owners.OwnerStack)
+	cache := owners.NewOwnerCache(ident)
+	base := stack.BaseLayer().(*owners.Owners)
 	return &reconciler{
 		controller: c,
 		classes:    classes,
-		cache:      owners.NewOwnerCache(ident),
-		owners: c.GetEnvironment().GetOrCreateSharedValue(KEY_OWNERS,
-			func() interface{} {
-				return owners.NewDefaultOwnerStack()
-			}).(*owners.OwnerStack).BaseLayer().(*owners.Owners),
+		cache:      cache,
+		ident:      ident,
+		owners:     base,
 	}, nil
 }

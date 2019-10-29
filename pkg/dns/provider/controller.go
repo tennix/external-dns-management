@@ -71,6 +71,7 @@ func DNSController(name string, factory DNSHandlerFactory) controller.Configurat
 	return controller.Configure(name).
 		RequireLease().
 		Require(CONTROLLER_OWNER).
+		After(CONTROLLER_OWNER).
 		DefaultedStringOption(OPT_CLASS, dns.DEFAULT_CLASS, "Identifier used to differentiate responsible controllers for entries").
 		DefaultedStringOption(OPT_IDENTIFIER, "dnscontroller", "Identifier used to mark DNS entries").
 		DefaultedStringOption(OPT_CACHE_DIR, "", "Directory to store zone caches (for reload after restart)").

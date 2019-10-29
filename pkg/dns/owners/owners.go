@@ -72,7 +72,7 @@ func (this *OwnerStack) BaseLayer() OwnerLayer {
 	for cur.link.down != nil {
 		cur = cur.link.down
 	}
-	return cur.Layer()
+	return cur.link.layer
 }
 
 func (this *OwnerStack) InserLayer(acc *OwnerLayerAccess, c OwnerLayerCreator) *OwnerLayerAccess {
