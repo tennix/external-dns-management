@@ -18,23 +18,76 @@
 package infoblox
 
 import (
+	"strconv"
+	"strings"
+
+	ibclient "github.com/infobloxopen/infoblox-go-client"
+
+	"github.com/gardener/external-dns-management/pkg/dns"
 	"github.com/gardener/external-dns-management/pkg/dns/provider"
+	"github.com/gardener/external-dns-management/pkg/dns/provider/raw"
 )
 
-func (this *Execution) createRecord(r Record) error {
-	this.handler.config.Metrics.AddRequests(provider.M_CREATERECORDS, 1)
-	_, err := this.handler.client.CreateObject(r)
+type access struct {
+	ibclient.IBConnector
+	metrics provider.Metrics
+	view    string
+}
+
+var _ raw.Executor = (*access)(nil)
+
+func NewAccess(client ibclient.IBConnector, view string, metrics provider.Metrics) *access {
+	return &access{
+		IBConnector: client,
+		metrics:     metrics,
+		view:        view,
+	}
+}
+
+func (this *access) CreateRecord(r raw.Record) error {
+	this.metrics.AddRequests(provider.M_CREATERECORDS, 1)
+	_, err := this.CreateObject(r.(ibclient.IBObject))
 	return err
 }
 
-func (this *Execution) updateRecord(r Record) error {
-	this.handler.config.Metrics.AddRequests(provider.M_CREATERECORDS, 1)
-	_, err := this.handler.client.UpdateObject(r, r.Id())
+func (this *access) UpdateRecord(r raw.Record) error {
+	this.metrics.AddRequests(provider.M_CREATERECORDS, 1)
+	_, err := this.UpdateObject(r.(ibclient.IBObject), r.GetId())
 	return err
 }
 
-func (this *Execution) deleteRecord(r Record) error {
-	this.handler.config.Metrics.AddRequests(provider.M_DELETERECORDS, 1)
-	_, err := this.handler.client.DeleteObject(r.Id())
+func (this *access) DeleteRecord(r raw.Record) error {
+	this.metrics.AddRequests(provider.M_DELETERECORDS, 1)
+	_, err := this.DeleteObject(r.GetId())
 	return err
+}
+
+func (this *access) NewRecord(fqdn string, rtype string, value string, zone provider.DNSHostedZone, ttl int64) raw.Record {
+	switch rtype {
+	case dns.RS_A:
+		return &RecordA{
+			Name:     fqdn,
+			Ipv4Addr: value,
+			Zone:     zone.Key(),
+			View:     this.view,
+		}
+	case dns.RS_CNAME:
+		return &RecordCNAME{
+			Name:      fqdn,
+			Canonical: value,
+			Zone:      zone.Key(),
+			View:      this.view,
+		}
+	case dns.RS_TXT:
+		if n, err := strconv.Unquote(value); err == nil && !strings.Contains(value, " ") {
+			value = n
+		}
+		return &RecordTXT{
+			Name: fqdn,
+			Text: value,
+			Zone: zone.Key(),
+			View: this.view,
+		}
+	}
+	return nil
 }

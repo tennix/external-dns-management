@@ -25,5 +25,6 @@ import (
 func init() {
 	provider.DNSController("", infoblox.Factory).
 		FinalizerDomain("dns.gardener.cloud").
+		ActivateExplicitly().
 		MustRegister(provider.CONTROLLER_GROUP_DNS_CONTROLLERS)
 }

@@ -33,6 +33,7 @@ import (
 	"github.com/gardener/external-dns-management/pkg/controller/provider/infoblox/sdk"
 	"github.com/gardener/external-dns-management/pkg/dns"
 	"github.com/gardener/external-dns-management/pkg/dns/provider"
+	"github.com/gardener/external-dns-management/pkg/dns/provider/raw"
 
 	ibclient "github.com/infobloxopen/infoblox-go-client"
 )
@@ -43,7 +44,7 @@ type Handler struct {
 	config         provider.DNSHandlerConfig
 	infobloxConfig InfobloxConfig
 	credentials    *google.Credentials
-	client         ibclient.IBConnector
+	access         *access
 	ctx            context.Context
 	service        *googledns.Service
 }
@@ -145,7 +146,7 @@ func NewHandler(config *provider.DNSHandlerConfig) (provider.DNSHandler, error) 
 		return nil, err
 	}
 
-	h.client = client
+	h.access = NewAccess(client, *h.infobloxConfig.View, config.Metrics)
 
 	h.ZoneCache, err = provider.NewZoneCache(config.CacheConfig, config.Metrics, nil, h.getZones, h.getZoneState)
 	if err != nil {
@@ -162,7 +163,7 @@ func (h *Handler) getZones(cache provider.ZoneCache) (provider.DNSHostedZones, e
 	var raw []ibclient.ZoneAuth
 	h.config.Metrics.AddRequests(provider.M_LISTZONES, 1)
 	obj := ibclient.NewZoneAuth(ibclient.ZoneAuth{})
-	err := h.client.GetObject(obj, "", &raw)
+	err := h.access.GetObject(obj, "", &raw)
 	if err != nil {
 		return nil, err
 	}
@@ -177,7 +178,7 @@ func (h *Handler) getZones(cache provider.ZoneCache) (provider.DNSHostedZones, e
 				View: *h.infobloxConfig.View,
 			},
 		)
-		err = h.client.GetObject(objN, "", &resN)
+		err = h.access.GetObject(objN, "", &resN)
 		if err != nil {
 			return nil, fmt.Errorf("could not fetch NS records from zone '%s': %s", z.Fqdn, err)
 		}
@@ -194,7 +195,7 @@ func (h *Handler) getZones(cache provider.ZoneCache) (provider.DNSHostedZones, e
 }
 
 func (h *Handler) getZoneState(zone provider.DNSHostedZone, cache provider.ZoneCache) (provider.DNSZoneState, error) {
-	state := newState()
+	state := raw.NewState()
 	rt := provider.M_LISTRECORDS
 
 	h.config.Metrics.AddRequests(rt, 1)
@@ -205,12 +206,12 @@ func (h *Handler) getZoneState(zone provider.DNSHostedZone, cache provider.ZoneC
 			View: *h.infobloxConfig.View,
 		},
 	)
-	err := h.client.GetObject(objA, "", &resA)
+	err := h.access.GetObject(objA, "", &resA)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch A records from zone '%s': %s", zone.Key(), err)
 	}
 	for _, res := range resA {
-		state.addRecord((*RecordA)(&res))
+		state.AddRecord((*RecordA)(&res).Copy())
 	}
 
 	h.config.Metrics.AddRequests(rt, 1)
@@ -221,12 +222,12 @@ func (h *Handler) getZoneState(zone provider.DNSHostedZone, cache provider.ZoneC
 			View: *h.infobloxConfig.View,
 		},
 	)
-	err = h.client.GetObject(objC, "", &resC)
+	err = h.access.GetObject(objC, "", &resC)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch CNAME records from zone '%s': %s", zone.Key(), err)
 	}
 	for _, res := range resC {
-		state.addRecord((*RecordCNAME)(&res))
+		state.AddRecord((*RecordCNAME)(&res).Copy())
 	}
 
 	h.config.Metrics.AddRequests(rt, 1)
@@ -237,31 +238,20 @@ func (h *Handler) getZoneState(zone provider.DNSHostedZone, cache provider.ZoneC
 			View: *h.infobloxConfig.View,
 		},
 	)
-	err = h.client.GetObject(objT, "", &resT)
+	err = h.access.GetObject(objT, "", &resT)
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch TXT records from zone '%s': %s", zone.Key(), err)
 	}
 	for _, res := range resT {
-		state.addRecord((*RecordTXT)(&res))
+		state.AddRecord((*RecordTXT)(&res).Copy())
 	}
 
+	state.CalculateDNSSets()
 	return state, nil
 }
 
 func (h *Handler) ExecuteRequests(logger logger.LogContext, zone provider.DNSHostedZone, state provider.DNSZoneState, reqs []*provider.ChangeRequest) error {
-	err := h.executeRequests(logger, zone, state, reqs)
+	err := raw.ExecuteRequests(logger, &h.config, h.access, zone, state, reqs)
 	h.ApplyRequests(err, zone, reqs)
 	return err
-}
-
-func (h *Handler) executeRequests(logger logger.LogContext, zone provider.DNSHostedZone, state provider.DNSZoneState, reqs []*provider.ChangeRequest) error {
-	exec := NewExecution(logger, h, state.(*zonestate), zone)
-	for _, r := range reqs {
-		exec.addChange(r)
-	}
-	if h.config.DryRun {
-		logger.Infof("no changes in dryrun mode for Infoblox")
-		return nil
-	}
-	return exec.submitChanges()
 }

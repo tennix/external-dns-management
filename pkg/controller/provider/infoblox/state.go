@@ -18,105 +18,41 @@
 package infoblox
 
 import (
-	ibclient "github.com/infobloxopen/infoblox-go-client"
-
 	"github.com/gardener/external-dns-management/pkg/controller/provider/infoblox/sdk"
 	"github.com/gardener/external-dns-management/pkg/dns"
-	"github.com/gardener/external-dns-management/pkg/dns/provider"
+	"github.com/gardener/external-dns-management/pkg/dns/provider/raw"
 )
-
-type Record interface {
-	ibclient.IBObject
-
-	Id() string
-	Type() string
-	Value() string
-	DNSName() string
-	TTL() int
-	SetTTL(int)
-	Copy() Record
-}
 
 type RecordA sdk.RecordA
 
-func (r *RecordA) Type() string    { return dns.RS_A }
-func (r *RecordA) Id() string      { return r.Ref }
-func (r *RecordA) DNSName() string { return r.Name }
-func (r *RecordA) Value() string   { return r.Ipv4Addr }
-func (r *RecordA) TTL() int        { return int(r.Ttl) }
-func (r *RecordA) SetTTL(ttl int)  {}
-func (r *RecordA) Copy() Record    { n := *r; return &n }
+func (r *RecordA) GetType() string    { return dns.RS_A }
+func (r *RecordA) GetId() string      { return r.Ref }
+func (r *RecordA) GetDNSName() string { return r.Name }
+func (r *RecordA) GetValue() string   { return r.Ipv4Addr }
+func (r *RecordA) GetTTL() int        { return int(r.Ttl) }
+func (r *RecordA) SetTTL(ttl int)     { r.Ttl = uint(ttl) }
+func (r *RecordA) Copy() raw.Record   { n := *r; return &n }
 
 type RecordCNAME sdk.RecordCNAME
 
-func (r *RecordCNAME) Type() string    { return dns.RS_CNAME }
-func (r *RecordCNAME) Id() string      { return r.Ref }
-func (r *RecordCNAME) DNSName() string { return r.Name }
-func (r *RecordCNAME) Value() string   { return r.Canonical }
-func (r *RecordCNAME) TTL() int        { return int(r.Ttl) }
-func (r *RecordCNAME) SetTTL(ttl int)  {}
-func (r *RecordCNAME) Copy() Record    { n := *r; return &n }
+func (r *RecordCNAME) GetType() string    { return dns.RS_CNAME }
+func (r *RecordCNAME) GetId() string      { return r.Ref }
+func (r *RecordCNAME) GetDNSName() string { return r.Name }
+func (r *RecordCNAME) GetValue() string   { return r.Canonical }
+func (r *RecordCNAME) GetTTL() int        { return int(r.Ttl) }
+func (r *RecordCNAME) SetTTL(ttl int)     { r.Ttl = uint(ttl) }
+func (r *RecordCNAME) Copy() raw.Record   { n := *r; return &n }
 
 type RecordTXT sdk.RecordTXT
 
-func (r *RecordTXT) Type() string    { return dns.RS_TXT }
-func (r *RecordTXT) Id() string      { return r.Ref }
-func (r *RecordTXT) DNSName() string { return r.Name }
-func (r *RecordTXT) Value() string   { return r.Text }
-func (r *RecordTXT) TTL() int        { return int(r.Ttl) }
-func (r *RecordTXT) SetTTL(ttl int)  {}
-func (r *RecordTXT) Copy() Record    { n := *r; return &n }
+func (r *RecordTXT) GetType() string    { return dns.RS_TXT }
+func (r *RecordTXT) GetId() string      { return r.Ref }
+func (r *RecordTXT) GetDNSName() string { return r.Name }
+func (r *RecordTXT) GetValue() string   { return raw.EnsureQuotedText(r.Text) }
+func (r *RecordTXT) GetTTL() int        { return int(r.Ttl) }
+func (r *RecordTXT) SetTTL(ttl int)     { r.Ttl = uint(ttl) }
+func (r *RecordTXT) Copy() raw.Record   { n := *r; return &n }
 
-type RecordSet []Record
-type DNSSet map[string]RecordSet
-
-type zonestate struct {
-	dnssets dns.DNSSets
-	records map[string]DNSSet
-}
-
-var _ provider.DNSZoneState = &zonestate{}
-
-func newState() *zonestate {
-	return &zonestate{records: map[string]DNSSet{}}
-}
-
-func (this *zonestate) GetDNSSets() dns.DNSSets {
-	return this.dnssets
-}
-
-func (this *zonestate) addRecord(r Record) {
-	name := r.DNSName()
-	t := r.Type()
-	e := this.records[name]
-	if e == nil {
-		e = DNSSet{}
-		this.records[name] = e
-	}
-	e[t] = append(e[t], r)
-}
-
-func (this *zonestate) getRecord(dnsname, rtype, value string) Record {
-	e := this.records[dnsname]
-	if e != nil {
-		for _, r := range e[rtype] {
-			if r.Value() == value {
-				return r
-			}
-		}
-	}
-	return nil
-}
-
-func (this *zonestate) calculateDNSSets() {
-	this.dnssets = dns.DNSSets{}
-	for dnsname, dset := range this.records {
-		for rtype, rset := range dset {
-			rs := dns.NewRecordSet(rtype, 0, nil)
-			for _, r := range rset {
-				rs.Add(&dns.Record{Value: r.Value()})
-			}
-			this.dnssets.AddRecordSetFromProvider(dnsname, rs)
-		}
-	}
-}
+var _ raw.Record = (*RecordA)(nil)
+var _ raw.Record = (*RecordCNAME)(nil)
+var _ raw.Record = (*RecordTXT)(nil)
